@@ -5,6 +5,9 @@ use crate::states;
 use bincode::{Decode, Encode};
 use rand::Rng;
 
+use std::fs::File;
+use std::io::Write;
+
 const CHUNK_HEIGHT: usize = 10;
 const CHUNK_WIDTH: usize = 10;
 
@@ -25,7 +28,8 @@ impl Plugin for WorldPlugin {
         .add_system_set(
             SystemSet::on_update(states::GameState::InGame)
                 .with_system(f2_prints_terrain)
-                .with_system(g_deletes_random_block),
+                .with_system(g_deletes_random_block)
+                .with_system(o_saves_world),
         )
         .add_system_set(SystemSet::on_exit(states::GameState::InGame).with_system(destroy_world));
     }
@@ -385,6 +389,37 @@ fn g_deletes_random_block(
 
     // don't care about result here
     let _res = destroy_block(x, y, &mut commands, &mut terrain);
+}
+
+fn o_saves_world(
+    input: Res<Input<KeyCode>>,
+    mut commands: Commands,
+    mut terrain: ResMut<Terrain>,
+){
+    if !input.just_pressed(KeyCode::O) {
+        return;
+    }
+
+    match bincode::encode_to_vec(terrain.as_ref(), BINCODE_CONFIG) {
+        Ok(encoded_vec) => {
+            // we have successfully encoded
+            let mut file = File::create("world.sav").expect("Unable to create file");
+            // print one long string of bytes, hex representation
+            file.write_all(&encoded_vec).expect("Unable to write encoded world");
+        }
+        Err(e) => {
+            // unable to encode
+            error!("unable to encode terrain, {}", e);
+        }
+    }
+}
+
+fn i_loads_world(
+    input: Res<Input<KeyCode>>,
+    mut commands: Commands,
+    mut terrain: ResMut<Terrain>,
+){
+    //TODO: Implement loading
 }
 
 /// unit tests
