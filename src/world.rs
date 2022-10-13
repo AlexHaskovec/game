@@ -404,7 +404,7 @@ fn o_saves_world(
         Ok(encoded_vec) => {
             // we have successfully encoded
             let mut file = File::create("world.sav").expect("Unable to create file");
-            // print one long string of bytes, hex representation
+            // write all the bytes from the vector to the .sav file
             file.write_all(&encoded_vec).expect("Unable to write encoded world");
         }
         Err(e) => {
@@ -420,6 +420,12 @@ fn i_loads_world(
     mut terrain: ResMut<Terrain>,
 ){
     //TODO: Implement loading
+    if !input.just_pressed(KeyCode::I) {
+        return;
+    }
+
+    let contents = fs::read("world.sav");
+
 }
 
 /// unit tests
