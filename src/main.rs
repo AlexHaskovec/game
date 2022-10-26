@@ -7,6 +7,8 @@ mod procedural_functions;
 mod states;
 mod world;
 mod network;
+mod args;
+mod parser;
 
 const TITLE: &str = "The Krusty Krabs";
 const WIN_W: f32 = 1280.;
@@ -17,6 +19,7 @@ struct CharacterCamera;
 
 fn main() {
     App::new()
+        .add_plugin(parser::ArgParsePlugin)
         .add_plugins(DefaultPlugins)
         .add_plugin(states::StatePlugin)
         .add_plugin(credit_image::CreditImagePlugin)
