@@ -1,16 +1,12 @@
-use bevy::prelude::*;
+use std::net::IpAddr;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{
+    Parser,
+};
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 #[command(author, version, about)]
-pub struct GameArgs {
-    #[clap(subcommand)]
-    pub game_mode: GameMode,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum GameMode {
+pub enum GameArgs{
     /// Server mode
     Server(OpenServer),
 
@@ -18,7 +14,8 @@ pub enum GameMode {
     Client(ConnectClient),
 }
 
-#[derive(Debug, Args)]
+
+#[derive(Debug, Parser, Clone)]
 pub struct OpenServer {
     /// Port to open server on
     pub open_port: u16,
@@ -27,10 +24,10 @@ pub struct OpenServer {
     pub filename: String,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Parser, Clone)]
 pub struct ConnectClient {
     /// address of server
-    pub server_ip: String,
+    pub server_ip: IpAddr,
 
     /// port to connect to
     pub connect_to_port: u16,

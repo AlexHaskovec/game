@@ -1,6 +1,12 @@
-use std::net::{SocketAddr, UdpSocket};
+use bevy::prelude::*;
+
+use std::net::{SocketAddr, UdpSocket, IpAddr};
 
 use bincode::{Decode, Encode};
+
+use crate::{
+    parser::*,
+};
 
 // TODO: split this into several files
 
@@ -67,9 +73,10 @@ fn send_message<M: NetworkMessage>(
 /// Code to be used by the server
 pub mod server {
     use super::*;
-    use crate::states;
+    use crate::{states, args::{OpenServer, GameArgs}};
     use bevy::prelude::*;
     use std::net::{SocketAddr, UdpSocket};
+    use clap::Parser;
 
     /// Should be used as a global resource on the server
     struct Server {
@@ -171,8 +178,15 @@ pub mod server {
     }
 
     fn create_server(mut commands: Commands) {
-        // TODO: use command line arguments for port and handle failure better
-        let server = match Server::new(SERVER_PORT) {
+        // TODO: handle failure better
+        let a = GameArgs::parse();
+        let s_port:u16;
+        match a{
+            GameArgs::Server(server) => s_port = server.open_port,
+            GameArgs::Client(_client) => panic!("wrong arguments led to here"),
+        }
+
+        let server = match Server::new(s_port) {
             Ok(s) => s,
             Err(e) => panic!("Unable to create server: {}", e),
         };
@@ -229,9 +243,10 @@ pub mod server {
 /// Code to be used by the client
 pub mod client {
     use super::*;
-    use crate::states;
+    use crate::{states, args::{ConnectClient,GameArgs}};
     use bevy::prelude::*;
     use std::net::{SocketAddr, UdpSocket};
+    use clap::Parser;
 
     /// Should be used as a global resource on the client
     struct Client {
@@ -308,7 +323,17 @@ pub mod client {
     }
 
     fn create_client(mut commands: Commands) {
-        let client = match Client::new(SocketAddr::from((SERVER_IP, SERVER_PORT))) {
+        let s_ip: IpAddr;
+        let s_port: u16;
+        let a = GameArgs::parse(); //Theoretically this should be a resource already but I couldn't figure out how to get it
+        match a{
+            GameArgs::Server(_server) => panic!("Incorrect args for this code"),
+            GameArgs::Client(client) => {
+                s_ip = client.server_ip;
+                s_port = client.connect_to_port;
+            },
+        }
+        let client = match Client::new(SocketAddr::from((s_ip, s_port))) {
             Ok(s) => s,
             Err(e) => panic!("Unable to create client: {}", e),
         };
