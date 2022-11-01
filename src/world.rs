@@ -3,9 +3,12 @@ use std::fs::*;
 use std::io::Write;
 
 use crate::{
-    procedural_functions::{self, dist_to_vein, generate_random_vein, generate_random_vein_count},
-    states,
     network::BINCODE_CONFIG,
+    procedural_functions::{
+        self, dist_to_vein, generate_random_cave, generate_random_cave_count, generate_random_vein,
+        generate_random_vein_count, is_point_in_cave,
+    },
+    states,
 };
 
 use bincode::{Decode, Encode};
@@ -41,8 +44,7 @@ pub fn create_world(mut commands: Commands, assets: Res<AssetServer>) {
     let mut terrain = Terrain::empty();
 
     // Generate one chunk
-    create_surface_chunk(&mut commands, &assets, &mut terrain);
-    spawn_chunk(1, &mut commands, assets, &mut terrain);
+    create_surface_chunk(&mut commands, assets, &mut terrain);
 
     let locations_to_destroy = [(5, 5), (5, 5), (300, 300), (5, 500), (2, 8)];
 
@@ -83,6 +85,7 @@ pub struct Terrain {
     /// Vector of ore veins - these are generated each time a chunk is generated
     /// Need to be chunk-independent as they can cross chunks
     veins: Vec<Vein>,
+    caves: Vec<Cave>,
 }
 
 impl Terrain {
@@ -91,16 +94,26 @@ impl Terrain {
     fn new(num_chunks: u64) -> Terrain {
         // Generate veins for each chunk before generating the chunks so chunks can use them
         let mut veins: Vec<Vein> = Vec::new();
+        let mut caves: Vec<Cave> = Vec::new();
         // Generate veins
         for chunk_number in 0..num_chunks {
             for vein_number in 0..generate_random_vein_count(BASE_SEED, chunk_number) {
                 veins.push(Vein::new(chunk_number, vein_number));
             }
+            for cave_number in 0..generate_random_cave_count(BASE_SEED, chunk_number) {
+                caves.push(Cave::new(chunk_number, cave_number));
+            }
         }
 
-        let chunks = (0..num_chunks).map(|d| Chunk::new(d, &veins)).collect();
+        let chunks = (0..num_chunks)
+            .map(|d| Chunk::new(d, &veins, &caves))
+            .collect();
 
-        Terrain { veins, chunks }
+        Terrain {
+            caves,
+            veins,
+            chunks,
+        }
     }
 
     /// Creates a terrain with no chunks
@@ -108,6 +121,7 @@ impl Terrain {
         Terrain {
             chunks: Vec::new(),
             veins: Vec::new(),
+            caves: Vec::new(),
         }
     }
 }
@@ -118,16 +132,18 @@ impl Terrain {
 pub struct Chunk {
     /// 2D array [x, y]
     pub blocks: [[Option<Block>; CHUNK_WIDTH]; CHUNK_HEIGHT],
+    pub rendered: bool,
     /// starting row for blocks is chunk_number * CHUNK_HEIGHT
-    chunk_number: u64,
+    pub chunk_number: u64,
 }
 
 impl Chunk {
-    pub fn new(depth: u64, veins: &Vec<Vein>) -> Self {
+    pub fn new(depth: u64, veins: &Vec<Vein>, caves: &Vec<Cave>) -> Self {
         // For now: populate entire Chunk with Sandstone
         let mut c = Chunk {
             blocks: [[None; CHUNK_WIDTH]; CHUNK_HEIGHT],
             chunk_number: depth,
+            rendered: false,
         };
 
         // Loop through chunk, filling in where blocks should be
@@ -164,10 +180,32 @@ impl Chunk {
                     }
                 }
 
-                c.blocks[y][x] = Some(Block {
-                    block_type,
-                    entity: None,
-                });
+                for cave in caves {
+                    if (cave.chunk_number == depth - 1) || (cave.chunk_number == depth) {
+                        let mut y_offset = if depth > cave.chunk_number {
+                            CHUNK_HEIGHT
+                        } else {
+                            0
+                        };
+
+                        y_offset = y + y_offset;
+
+                        //Calculates if given point (x,y) is in oval defined by Cave
+                        //Seed is needed to add noise to the edges of the oval
+                        if is_point_in_cave(cave, x, y + y_offset, BASE_SEED) {
+                            block_type = cave.block_type;
+                        }
+                    }
+                }
+
+                if block_type != BlockType::CaveVoid {
+                    c.blocks[y][x] = Some(Block {
+                        block_type,
+                        entity: None,
+                    });
+                } else {
+                    c.blocks[y][x] = None;
+                }
             }
         }
 
@@ -180,6 +218,7 @@ impl Chunk {
         let mut c = Chunk {
             blocks: [[None; CHUNK_WIDTH]; CHUNK_HEIGHT],
             chunk_number: 0,
+            rendered: false,
         };
 
         let random_vals = procedural_functions::generate_random_values(
@@ -237,6 +276,23 @@ impl Vein {
     pub fn new(chunk_number: u64, vein_number: u64) -> Self {
         // Hard-coded seed for now
         generate_random_vein(BASE_SEED, chunk_number, vein_number)
+    }
+}
+
+#[derive(Encode, Decode, Debug, PartialEq)]
+pub struct Cave {
+    pub block_type: BlockType,
+    pub chunk_number: u64,
+    pub cave_number: u64,
+    pub start_x: usize, //Oval Formula (x^2)/(a^2) + (y^2)/(b^2) = scale
+    pub start_y: usize,
+    pub a: f32,
+    pub b: f32,
+}
+
+impl Cave {
+    pub fn new(chunk_number: u64, cave_number: u64) -> Self {
+        generate_random_cave(BASE_SEED, chunk_number, cave_number)
     }
 }
 
@@ -309,6 +365,7 @@ pub struct RenderedBlock;
 pub enum BlockType {
     Sandstone,
     Coal,
+    CaveVoid,
 }
 
 impl BlockType {
@@ -317,6 +374,7 @@ impl BlockType {
         match self {
             BlockType::Sandstone => "Sandstone.png",
             BlockType::Coal => "Coal.png",
+            BlockType::CaveVoid => "",
         }
     }
 }
@@ -327,18 +385,37 @@ pub fn generate_chunk_veins(chunk_number: u64, terrain: &mut Terrain) {
     }
 }
 
+pub fn generate_chunk_caves(chunk_number: u64, terrain: &mut Terrain) {
+    for cave_number in 0..generate_random_cave_count(BASE_SEED, chunk_number) {
+        terrain.caves.push(Cave::new(chunk_number, cave_number));
+    }
+}
+
 /// Create all blocks in chunk as actual entities (and store references to entity in chunk.blocks)
 pub fn spawn_chunk(
     chunk_number: u64,
     commands: &mut Commands,
-    assets: Res<AssetServer>,
+    assets: &Res<AssetServer>,
     terrain: &mut Terrain,
 ) {
     generate_chunk_veins(chunk_number, terrain);
+    generate_chunk_caves(chunk_number, terrain);
 
-    let mut chunk = Chunk::new(chunk_number, &(terrain.veins));
+    let mut chunk = Chunk::new(chunk_number, &(terrain.veins), &(terrain.caves));
 
-    // Loop through entire chunk (2D Array)
+    //Calls function to loop through and create the entities and render them
+    render_chunk(chunk_number, commands, assets, &mut chunk);
+    // add the chunk to our terrain resource
+    terrain.chunks.push(chunk);
+}
+pub fn render_chunk(
+    chunk_number: u64,
+    commands: &mut Commands,
+    assets: &Res<AssetServer>,
+    chunk: &mut Chunk,
+) {
+    //spawns each entity and asigns it
+    chunk.rendered = true;
     for x in 0..CHUNK_WIDTH {
         for y in 0..CHUNK_HEIGHT {
             let block_opt = &mut chunk.blocks[y][x];
@@ -369,55 +446,38 @@ pub fn spawn_chunk(
             // else there is no block and we don't have to spawn any sprite
         }
     }
-
-    // add the chunk to our terrain resource
-    terrain.chunks.push(chunk);
+}
+pub fn derender_chunk(commands: &mut Commands, chunk: &mut Chunk) {
+    //Despawns each entity and un asigns them
+    chunk.rendered = false;
+    for x in 0..CHUNK_WIDTH {
+        for y in 0..CHUNK_HEIGHT {
+            let block_opt = &mut chunk.blocks[y][x];
+            if let Some(block) = block_opt {
+                match block.entity {
+                    Some(entity) => {
+                        commands.entity(entity).despawn();
+                    }
+                    None => {}
+                };
+                block.entity = None;
+            }
+        }
+    }
 }
 
 /// Create all blocks in surface chunk as actual entities (and store references to entity in chunk.blocks)
 pub fn create_surface_chunk(
     commands: &mut Commands,
-    assets: &Res<AssetServer>,
+    assets: Res<AssetServer>,
     terrain: &mut Terrain,
 ) {
     generate_chunk_veins(0, terrain);
 
     let mut chunk = Chunk::new_surface(&(terrain.veins));
 
-    // Loop through entire chunk (2D Array)
-    for x in 0..CHUNK_WIDTH {
-        for y in 0..CHUNK_HEIGHT {
-            let block_opt = &mut chunk.blocks[y][x];
-
-            // if there is a block at this location
-            if let Some(block) = block_opt {
-                // spawn in the sprite for the block
-                let entity = commands
-                    .spawn()
-                    .insert_bundle(SpriteBundle {
-                        texture: assets.load(block.block_type.image_file_path()),
-                        transform: Transform {
-                            translation: Vec3::from_array([
-                                to_world_point_x(x),
-                                to_world_point_y(y, 0),
-                                1.,
-                            ]),
-                            ..default()
-                        },
-                        ..default()
-                    })
-                    .insert(RenderedBlock)
-                    .id();
-
-                // link the entity to the block
-                block.entity = Option::Some(entity);
-            }
-            // else there is no block and we don't have to spawn any sprite
-        }
-
-        //terrain.chunks.push(chunk);
-    }
-
+    //Calls function to loop through and create the entities and render them
+    render_chunk(0, commands, &assets, &mut chunk);
     terrain.chunks.push(chunk);
 }
 
@@ -542,7 +602,7 @@ fn print_encoding_sizes() {
         Err(e) => error!("unable to encode block: {}", e),
     }
 
-    match bincode::encode_to_vec(Chunk::new(0, &Vec::new()), BINCODE_CONFIG) {
+    match bincode::encode_to_vec(Chunk::new(0, &Vec::new(), &Vec::new()), BINCODE_CONFIG) {
         Ok(chunk) => info!("a default chunk is {} bytes", chunk.len()),
         Err(e) => error!("unable to encode chunk: {}", e),
     }
@@ -717,7 +777,7 @@ mod tests {
     #[test]
     fn encode_decode_chunk() {
         let original = {
-            let mut chunk = Chunk::new(0, &Vec::new());
+            let mut chunk = Chunk::new(0, &Vec::new(), &Vec::new());
             // change some block
             chunk.blocks[1][1] = Some(Block::new(BlockType::Sandstone));
             chunk
@@ -749,9 +809,10 @@ mod tests {
         let block_size = bincode::encode_to_vec(Block::new(BlockType::Sandstone), BINCODE_CONFIG)
             .unwrap()
             .len();
-        let chunk_size = bincode::encode_to_vec(Chunk::new(0, &Vec::new()), BINCODE_CONFIG)
-            .unwrap()
-            .len();
+        let chunk_size =
+            bincode::encode_to_vec(Chunk::new(0, &Vec::new(), &Vec::new()), BINCODE_CONFIG)
+                .unwrap()
+                .len();
         let terrain_size = bincode::encode_to_vec(Terrain::new(1), BINCODE_CONFIG)
             .unwrap()
             .len();
