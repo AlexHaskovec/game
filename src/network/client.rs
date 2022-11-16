@@ -1,7 +1,8 @@
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 
 use super::*;
-use crate::player;
+use crate::player::{self, Player};
+use crate::player::CameraBoundsBox;
 use crate::states;
 use bevy::prelude::*;
 
@@ -195,6 +196,53 @@ fn queue_inputs(mut client: ResMut<Client>, bevy_input: Res<Input<KeyCode>>) {
     // TODO: add block mining attempts
 
     client.enqueue_body(ClientBodyElem::Input(input));
+}
+
+fn queue_mining(mut client: ResMut<Client>, mut windows: ResMut<Windows>,
+    mouse: Res<Input<MouseButton>>,
+    mut query: Query<(
+        &mut Transform,
+        &mut CameraBoundsBox,
+        With<Player>,
+    )>,
+    mut commands: Commands,
+    time: Res<Time>,) {
+
+        let window = windows.get_primary_mut();
+
+    if !window.is_none() {
+        let win = window.unwrap();
+        for (transform, camera_box, _player) in query.iter_mut() {
+            let ms = win.cursor_position();
+
+            if !ms.is_none() {
+                let mouse_pos = ms.unwrap();
+
+                //calculate distance of click from camera center
+                let dist_x = mouse_pos.x - (WIN_W / 2.);
+                let dist_y = mouse_pos.y - (WIN_H / 2.);
+
+                //calculate bevy choords of click
+                let game_x = camera_box.center_coord.x + dist_x;
+                let game_y = camera_box.center_coord.y + dist_y;
+
+                //calculate block coords from bevy coords
+                let block_x = (game_x / 32.).round() as usize;
+                let block_y = (game_y / -32.).round() as usize;
+
+                //calculate player distance from mined blocks
+                let player_x_coord = transform.translation.x;
+                let player_y_coord = transform.translation.y;
+
+                let player_x = (player_x_coord / 32.).round();
+                let player_y = (player_y_coord / -32.).round();
+
+                let mine_dist = ((block_x as f32 - player_x).powi(2)
+                    + (block_y as f32 - player_y).powi(2) as f32)
+                    .sqrt();
+                }
+            }
+        }
 }
 
 /// Get and handle all messages from server
