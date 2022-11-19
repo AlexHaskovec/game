@@ -1,11 +1,11 @@
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 
 use super::*;
-use crate::player::{self, Player};
 use crate::player::CameraBoundsBox;
+use crate::player::{self, Player};
 use crate::states;
-use bevy::prelude::*;
 use crate::{WIN_H, WIN_W};
+use bevy::prelude::*;
 
 const NETWORK_TICK_DELAY: u64 = 60;
 
@@ -177,15 +177,13 @@ fn p_queues_ping(mut client: ResMut<Client>, input: Res<Input<KeyCode>>) {
 }
 
 /// Scrape client inputs and queue up sending them to server
-fn queue_inputs(mut client: ResMut<Client>,
+fn queue_inputs(
+    mut client: ResMut<Client>,
     bevy_input: Res<Input<KeyCode>>,
     mouse: Res<Input<MouseButton>>,
     mut windows: ResMut<Windows>,
-    mut query: Query<(
-        &mut Transform,
-        &mut CameraBoundsBox,
-        With<Player>,
-    )>,) {
+    mut query: Query<(&mut Transform, &mut CameraBoundsBox, With<Player>)>,
+) {
     // TODO: remove
     // only send out once every x frames
     if client.current_sequence % NETWORK_TICK_DELAY != 0 {

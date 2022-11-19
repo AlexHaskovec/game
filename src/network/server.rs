@@ -248,7 +248,7 @@ fn compute_new_bodies(client: &mut ClientInfo, message: ClientToServer) {
         // match client bodies to server bodies
         .map(|elem| match elem {
             ClientBodyElem::Ping => Some(ServerBodyElem::Pong(message.header.current_sequence)),
-            ClientBodyElem::Input(input) => {
+            ClientBodyElem::Input(_input) => {
                 // TODO: handle player input
                 info!("ignoring player input for now");
                 None
