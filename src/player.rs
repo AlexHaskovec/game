@@ -61,9 +61,9 @@ pub struct PlayerInput {
 
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct MiningInput {
-    mine:bool, //true = block was clicked to mine, false = block was released.
-    block_x:usize,
-    block_y:usize,
+    pub mine:bool, //true = block was clicked to mine, false = block was released.
+    pub block_x:usize,
+    pub block_y:usize,
 }
 
 #[derive(Component)]
