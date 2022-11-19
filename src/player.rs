@@ -57,6 +57,9 @@ pub struct PlayerInput {
     pub left: bool,
     pub right: bool,
     pub jump: bool,
+    pub mine: bool, //true = block was clicked to mine, false = block was released.
+    pub block_x: usize,
+    pub block_y: usize,
 }
 
 #[derive(Component)]
@@ -115,7 +118,7 @@ impl Plugin for PlayerPlugin {
             SystemSet::on_update(GameState::InGame)
                 .with_system(handle_camera_movement)
                 .with_system(handle_movement)
-                .with_system(handle_mining)
+                //.with_system(handle_mining)
                 .with_system(handle_terrain),
         )
         .add_system_set(SystemSet::on_enter(GameState::InGame).with_system(setup))
@@ -405,76 +408,6 @@ fn handle_camera_movement(
         if input.pressed(KeyCode::R) {
             camera.0.translation.x = camera_box.center_coord[0];
             camera.0.translation.y = camera_box.center_coord[1];
-        }
-    }
-}
-
-fn handle_mining(
-    mut windows: ResMut<Windows>,
-    mouse: Res<Input<MouseButton>>,
-    mut query: Query<(
-        &mut Transform,
-        &mut CameraBoundsBox,
-        &mut MineDuration,
-        With<Player>,
-    )>,
-    mut commands: Commands,
-    mut terrain: ResMut<Terrain>,
-    time: Res<Time>,
-) {
-    let window = windows.get_primary_mut();
-
-    if !window.is_none() {
-        let win = window.unwrap();
-
-        for (transform, camera_box, mut mine_timer, _player) in query.iter_mut() {
-            let ms = win.cursor_position();
-
-            if !ms.is_none() {
-                let mouse_pos = ms.unwrap();
-
-                //calculate distance of click from camera center
-                let dist_x = mouse_pos.x - (WIN_W / 2.);
-                let dist_y = mouse_pos.y - (WIN_H / 2.);
-
-                //calculate bevy choords of click
-                let game_x = camera_box.center_coord.x + dist_x;
-                let game_y = camera_box.center_coord.y + dist_y;
-
-                //calculate block coords from bevy coords
-                let block_x = (game_x / 32.).round() as usize;
-                let block_y = (game_y / -32.).round() as usize;
-
-                //calculate player distance from mined blocks
-                let player_x_coord = transform.translation.x;
-                let player_y_coord = transform.translation.y;
-
-                let player_x = (player_x_coord / 32.).round();
-                let player_y = (player_y_coord / -32.).round();
-
-                let mine_dist = ((block_x as f32 - player_x).powi(2)
-                    + (block_y as f32 - player_y).powi(2) as f32)
-                    .sqrt();
-
-                if mouse.pressed(MouseButton::Left)
-                    && mine_dist <= PLAYER_MINE_RADIUS
-                    && block_exists(block_x, block_y, &mut terrain)
-                {
-                    if mine_timer.timer.elapsed_secs() >= PLAYER_MINE_DURATION {
-                        let _res = destroy_block(block_x, block_y, &mut commands, &mut terrain);
-                        mine_timer.timer.reset();
-                    }
-
-                    mine_timer.timer.tick(time.delta());
-                } else if mouse.just_released(MouseButton::Left) {
-                    mine_timer.timer.reset();
-                }
-
-                //DEBUGGING: Right click to instantly mine
-                if mouse.pressed(MouseButton::Right) {
-                    let _res = destroy_block(block_x, block_y, &mut commands, &mut terrain);
-                }
-            }
         }
     }
 }
