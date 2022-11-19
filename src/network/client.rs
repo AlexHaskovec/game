@@ -196,14 +196,6 @@ fn queue_inputs(mut client: ResMut<Client>,
         return;
     }
 
-    let input = player::PlayerInput {
-        left: bevy_input.pressed(KeyCode::A),
-        right: bevy_input.pressed(KeyCode::D),
-        jump: bevy_input.pressed(KeyCode::Space),
-    };
-
-    // TODO: add block mining attempts
-
     //Code to calculate the block x and y to mine based on the mouse x and y from bevy
 
     let mut block_x_from_mouse = 0;
@@ -234,8 +226,10 @@ fn queue_inputs(mut client: ResMut<Client>,
         }
     }
 
-
-    let mining_attempt = player::MiningInput {
+    let input = player::PlayerInput {
+        left: bevy_input.pressed(KeyCode::A),
+        right: bevy_input.pressed(KeyCode::D),
+        jump: bevy_input.pressed(KeyCode::Space),
         mine: mouse.pressed(MouseButton::Left),
         block_x: block_x_from_mouse,
         block_y: block_y_from_mouse,
