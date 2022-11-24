@@ -42,6 +42,17 @@ pub(super) struct ServerHeader {
     pub sequence: u64,
 }
 
+#[derive(Encode, Decode, Debug, Clone)]
+pub struct Coords{
+    player_x: f32,
+    player_y: f32,
+}
+
+#[derive(Encode, Decode, Debug, Clone)]
+pub struct PlayerCoords{
+    coords: Vec<Coords>,
+}
+
 /// One element (message) for the body of a ServerToClient message
 #[derive(Encode, Decode, Debug, Clone)]
 pub(super) enum ServerBodyElem {
@@ -52,6 +63,8 @@ pub(super) enum ServerBodyElem {
     /// TODO: separate into baseline and delta
     /// TODO: use ref instead
     Terrain(Terrain),
+
+    PlayerCoords(PlayerCoords),
 }
 
 impl NetworkMessage for ServerToClient {}

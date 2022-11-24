@@ -1,5 +1,5 @@
 use super::*;
-use crate::{states, world::Terrain};
+use crate::{states, world::{Terrain, self}, player};
 use bevy::prelude::*;
 use iyes_loopless::prelude::*;
 use std::{
@@ -21,7 +21,7 @@ const GAME_TICK_HZ: u64 = 60;
 pub const GAME_TICK_LABEL: &str = "GAME_TICK";
 
 // maximum number of clients (final goal = 2, strech goal = 4)
-const MAX_CLIENTS: usize = 2; 
+const MAX_CLIENTS: usize = 2;
 
 /// Should be used as a global resource on the server
 struct Server {
@@ -214,12 +214,12 @@ fn increase_tick(mut server: ResMut<Server>) {
 }
 
 /// Server system
-fn server_handle_messages(mut server: ResMut<Server>) {
+fn server_handle_messages(mut server: ResMut<Server>, mut terrain: ResMut<Terrain>, mut commands: Commands) {
     loop {
         // handle all messages on our socket
         match server.get_one_message() {
             Ok((client, message)) => {
-                compute_new_bodies(client, message);
+                compute_new_bodies(client, message, &mut commands, &mut terrain);
             }
             Err(ReceiveError::NoMessage) => {
                 // break whenever we run out of messages
@@ -238,7 +238,7 @@ fn server_handle_messages(mut server: ResMut<Server>) {
 
 /// Process a client's message and push new bodies to the next packet sent to the client
 /// TODO: will probably need direct World access in the future
-fn compute_new_bodies(client: &mut ClientInfo, message: ClientToServer) {
+fn compute_new_bodies(client: &mut ClientInfo, message: ClientToServer, commands: &mut Commands, terrain: &mut Terrain){//}, commands: &mut Commands, terrain: &mut Terrain) {
     // TODO: just impl Display or Debug instead
     let mut bodies_str = "".to_string();
     for body in &message.bodies {
@@ -274,9 +274,28 @@ fn compute_new_bodies(client: &mut ClientInfo, message: ClientToServer) {
         // match client bodies to server bodies
         .filter_map(|elem| match elem {
             ClientBodyElem::Ping => Some(ServerBodyElem::Pong(message.header.current_sequence)),
-            ClientBodyElem::Input(_input) => {
+            ClientBodyElem::Input(input) => {
                 // TODO: handle player input
                 info!("ignoring player input for now");
+                if input.left{
+                    //move the player that sent this message to the left
+                    //add that information to bodies
+                }
+                if input.right{
+
+                }
+                if input.jump{
+
+                }
+                if input.mine{
+                    //TODO: implement tim
+                    let x = input.block_x;
+                    let y = input.block_y;
+
+                    //TODO: add mining timer and radius to destroy blocks
+                    world::destroy_block(x,y, commands, terrain); //This will destroy the block
+                }
+
                 None
             }
         })
@@ -297,7 +316,8 @@ fn compute_new_bodies(client: &mut ClientInfo, message: ClientToServer) {
     // only keep pongs that are in response to a ping newer than or equals to the client's last_ack
     client.bodies.retain(|elem| match elem {
         ServerBodyElem::Pong(seq) => *seq >= client.last_ack,
-        ServerBodyElem::Terrain(_) => true, // always keep terrains
+        ServerBodyElem::Terrain(_) => true,// always keep terrains
+        ServerBodyElem::PlayerCoords(_) => todo!(),
     });
 }
 
@@ -323,7 +343,8 @@ fn send_all_messages(mut server: ResMut<Server>) {
     for client_info in server.clients.values_mut() {
         client_info.bodies.retain(|b| match b {
             ServerBodyElem::Pong(_) => true, // keep pongs until we know they were received
-            ServerBodyElem::Terrain(_) => false, // never keep old terrains
+            ServerBodyElem::Terrain(_) => false,// never keep old terrains
+            ServerBodyElem::PlayerCoords(_) => todo!(),
         });
     }
 }

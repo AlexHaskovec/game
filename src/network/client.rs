@@ -113,6 +113,10 @@ impl Client {
 
                 info!("done with terrain overwrite");
             }
+            ServerBodyElem::PlayerCoords(pc)=>{
+                info!("recieving player coords, updating player position");
+                //TODO: update the player coordinates
+            }
         }
     }
 }
